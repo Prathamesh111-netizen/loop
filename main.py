@@ -2,17 +2,22 @@ import os
 import psycopg2
 import requests
 import csv
-from flask import Flask
-from datetime import datetime
+
+from flask import Flask, send_file
+from flask_cors import CORS
+from datetime import datetime, timedelta
 
 
 app = Flask(__name__)
+CORS(app)
+
 conn = psycopg2.connect(
-    host="localhost",
-    database="postgres",
+    host="db.xkmngqfrkgxvrmgikfbi.supabase.co",
+    database="loop",
     user="postgres",
-    password="postgrespw",
-    port="32768")
+    password="Deadcoder11u2",
+    port="5432"
+)
 
 
 def get_data(request_timestamp):
@@ -119,6 +124,51 @@ def process_data(report_id, request_timestamp):
                   downtime_last_hour, downtime_last_day, downtime_last_week]
 
         results.append(result)
+        
+        # store_poll = []
+        # for polls in store_results[store]:
+        #     datetime_object = polls[2]
+        #     store_poll.append({
+        #         "time": datetime_object,
+        #         "status": polls[1]
+        #     })
+        # sorted_data = sorted(store_poll, key=lambda x: x["time"])
+
+        # def calculate_uptime(data, start_time, end_time):
+        #     uptime = timedelta()
+        #     last_status = None
+        #     for item in data:
+        #         item_time = item["time"]
+        #         if start_time <= item_time <= end_time:
+        #                 if item["status"] != last_status:
+        #                     if last_status is not None:
+        #                         uptime += item_time - last_time
+        #                     last_status = item["status"]
+        #                     last_time = item_time
+        #         else:
+        #             last_time = item_time
+        #     if last_status is not None and last_status:
+        #         uptime += end_time - last_time
+        #     return uptime
+
+        # current_time = datetime.now()
+        # last_hour_start = current_time - timedelta(hours=1)
+        # uptime_last_hour = calculate_uptime(sorted_data, last_hour_start, current_time)
+
+        # last_day_start = current_time - timedelta(days=1)
+        # uptime_last_day = calculate_uptime(sorted_data, last_day_start, current_time)
+
+        # last_week_start = current_time - timedelta(weeks=1)
+        # uptime_last_week = calculate_uptime(sorted_data, last_week_start, current_time)
+
+        # downtime_last_week = timedelta(hours=total_business_hours) - uptime_last_week
+        # downtime_last_hour = timedelta(minutes=60) - uptime_last_hour
+        # downtime_last_day = timedelta(hours=business_hours_for_store[1]) - uptime_last_day
+
+        # result = [store, uptime_last_hour, uptime_last_day, uptime_last_week,
+        #           downtime_last_hour, downtime_last_day, downtime_last_week]
+
+        # results.append(result)
 
     # store results in report_data in csv format
     report_file_location = f"report_{report_id}.csv"
@@ -129,8 +179,7 @@ def process_data(report_id, request_timestamp):
         writer.writerows(results)
 
     print(f"Data has been written to {report_file_location} successfully.")
-
-    return "Complete", report_file_location
+    return "Complete",  report_file_location
 
 
 def generate_report(report_id):
@@ -162,6 +211,12 @@ def generate_report(report_id):
     else:
         print("error generating report")
 
+@app.route('/download/<file_path>')
+def download_file(file_path):
+    # Path to the file on the server
+    file_path = 'P:\\Github\\sharma\\' + file_path
+    print (file_path)
+    return send_file(file_path, as_attachment=True)
 
 @app.route('/get_report/<report_id>')
 def get_report(report_id):
@@ -173,7 +228,7 @@ def get_report(report_id):
         return 'Report not found'
     else:
         if rows[0][2] == 'Complete':
-            return 'Report is ready'
+            return str(rows[0][3])
         else:
             return 'Report is not ready'
 
@@ -183,25 +238,26 @@ def trigger_report():
     cur = conn.cursor()
 
     # Original flow
-    # cur.execute("SELECT * FROM report WHERE request_timestamp >= current_timestamp - INTERVAL '1 hour';")
-    # rows = cur.fetchall()
-    # report_id = 0
-    # if len(rows) == 0:
-    #     cur.execute("INSERT INTO report (request_timestamp, request_status) VALUES (current_timestamp, 'Running');")
-    #     conn.commit()
-    #     cur.execute("SELECT * FROM report WHERE request_timestamp >= current_timestamp - INTERVAL '1 hour';")
-    #     rows = cur.fetchall()
-    #     report_id = rows[0][0]
-    #     generate_report(report_id)
-    # else:
-    #     report_id = rows[0][0]
+    cur.execute("SELECT * FROM report WHERE request_timestamp >= current_timestamp - INTERVAL '1 hour';")
+    rows = cur.fetchall()
+    report_id = 0
+    
+    if len(rows) == 0:
+        cur.execute("INSERT INTO report (request_timestamp, report_status) VALUES (current_timestamp, 'Running');")
+        conn.commit()
+        cur.execute("SELECT * FROM report WHERE request_timestamp >= current_timestamp - INTERVAL '1 hour';")
+        rows = cur.fetchall()
+        report_id = rows[0][0]
+        generate_report(report_id)
+    else:
+        report_id = rows[0][0]
 
     # Development test flow
     conn.commit()
-    cur.execute(
-        "SELECT * FROM report;")
-    rows = cur.fetchall()
-    report_id = rows[len(rows)-1][0]
+    # cur.execute(
+    #     "SELECT * FROM report;")
+    # rows = cur.fetchall()
+    # report_id = rows[len(rows)-1][0]
 
     # Process call to generate report
     generate_report(report_id)
